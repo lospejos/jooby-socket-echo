@@ -9,6 +9,11 @@ import org.jooby.mvc.Path;
 import org.jooby.mvc.Produces;
 
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionStage;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.logging.Logger;
 
 @Path("/ws")
@@ -18,6 +23,10 @@ public class WebSocketListener implements OnMessage<String>, OnOpen, OnClose, On
 
     private WebSocket webSocket;
 
+    private ExecutorService executorService = Executors.newFixedThreadPool(8);
+
+    AtomicInteger integer = new AtomicInteger(1);
+
     @Inject
     public WebSocketListener(WebSocket webSocket){
         this.webSocket = webSocket;
@@ -26,13 +35,23 @@ public class WebSocketListener implements OnMessage<String>, OnOpen, OnClose, On
 
     @Override
     public void onMessage(String message) throws Exception {
-        webSocket.broadcast(message);
+        CompletableFuture.supplyAsync(() -> {
+            return integer.incrementAndGet();
+        }, executorService).thenApplyAsync(i -> {
+            return i + 1;
+        }).thenRunAsync(() -> {
+            try {
+                webSocket.broadcast(integer.intValue());
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        });
+
     }
 
     @Override
     public void onOpen(Request req, WebSocket ws) throws Exception {
-        ws.send(req.attributes());
-        Logger.getLogger("Socket").info(ws.toString());
+
     }
 
     @Override
